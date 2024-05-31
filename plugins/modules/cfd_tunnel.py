@@ -18,8 +18,6 @@ short_description: Manage Cloudflare Tunnel
 version_added: 0.0.1
 description:
   - Manages Cloudflare Tunnel
-extends_documentation_fragment:
-  - code_kaizen.cloudflare.attributes
 attributes:
   check_mode:
     support: full
