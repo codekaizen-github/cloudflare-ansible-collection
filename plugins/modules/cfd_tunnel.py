@@ -6,116 +6,122 @@ from typing import List, Optional
 import traceback
 __metaclass__ = type
 
+# https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels
+# https://developers.cloudflare.com/api/operations/cloudflare-tunnel-create-a-cloudflare-tunnel
+
 DOCUMENTATION = '''
 ---
-module: repo_variable
-short_description: Manage repository variables on Github
-version_added: 1.0.0
+module: cfd_tunnel
+short_description: Manage Cloudflare Tunnel
+version_added: 0.0.1
 description:
-  - Manages Github Actions variables in repositories using PyGithub library.
-  - Authentication can be done with O(access_token) or with O(username) and O(password).
+  - Manages Cloudflare Tunnel
 extends_documentation_fragment:
-  - webfx.github_api.attributes
+  - code_kaizen.cloudflare.attributes
 attributes:
   check_mode:
     support: full
   diff_mode:
     support: none
 options:
-  api_url:
+  api_token:
     description:
-    - URL to the GitHub API if not using github.com but you own instance.
+    - The Cloudflare API token.
+    details:
+      - See: https://developers.cloudflare.com/fundamentals/api/get-started/create-token/
     type: str
-    default: 'https://api.github.com'
-    version_added: "3.5.0"
-  username:
+    required: true
+    version_added: "0.0.1"
+  account_id:
     description:
-    - Username used for authentication.
-    - This is only needed when not using O(access_token).
+    - ID of the Cloudflare account.
     type: str
-    required: false
-  password:
-    description:
-    - Password used for authentication.
-    - This is only needed when not using O(access_token).
-    type: str
-    required: false
-  access_token:
-    description:
-    - Token parameter for authentication.
-    - This is only needed when not using O(username) and O(password).
-    type: str
-    required: false
-  organization:
-    description:
-    - Organization for the repository.
-    type: str
-    required: false
+    required: true
+    version_added: "0.0.1"
   name:
     description:
-    - Repository name.
+    - A user-friendly name for a tunnel.
     type: str
     required: true
-  variable_name:
+    version_added: "0.0.1"
+    examples:
+      - blog
+  config_src:
     description:
-    - Name of the environment variable.
+      - Indicates if this is a locally or remotely configured tunnel.
+    details:
+      - If local, manage the tunnel using a YAML file on the origin machine.
+      - If cloudflare, manage the tunnel on the Zero Trust dashboard or using the Cloudflare Tunnel configuration endpoint.
     type: str
-    required: true
-  variable_value:
+    required: false
+    choices: [ local, cloudflare ]
+    default: local
+    version_added: "0.0.1"
+    examples:
+      - local
+  tunnel_secret:
     description:
-    - Value of the environment variable.
+      - Sets the password required to run a locally-managed tunnel. Must be at least 32 bytes and encoded as a base64 string.
     type: str
-    required: true
+    required: false
+    version_added: "0.0.1"
+    examples:
+      - "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
   state:
     description:
-    - Whether the variable should exist or not.
+    - Whether the tunnel should exist or not.
+    details:
+      - If present, the tunnel will be created if it does not exist or updated if it does.
+      - If absent, the tunnel will be deleted.
+      - If fetched, the tunnel will be fetched.
     type: str
-    default: present
-    choices: [ absent, present, fetched ]
     required: false
+    choices: [ absent, present, fetched ]
+    default: present
+    version_added: "0.0.1"
 requirements:
-- PyGithub>=1.54
-notes:
-- For Python 3, PyGithub>=1.54 should be used.
-- "For Python 3.5, PyGithub==1.54 should be used. More information: U(https://pygithub.readthedocs.io/en/latest/changes.html#version-1-54-november-30-2020)."
-- "For Python 2.7, PyGithub==1.45 should be used. More information: U(https://pygithub.readthedocs.io/en/latest/changes.html#version-1-45-december-29-2019)."
+- requests>=2.22.0
 author:
 - Andrew Dawes (@andrewjdawes)
+notes:
+- N/A
+seealso:
+- name: Cloudflare Tunnels API reference
+  description: Complete reference of the Cloudflare Tunnels API.
+  link: https://developers.cloudflare.com/api/operations/cloudflare-tunnel-create-a-cloudflare-tunnel
 '''
 
 EXAMPLES = '''
-- name: Add or update a variable
-  webfx.github_api.repo_variable:
-    access_token: mytoken
-    organization: MyOrganization
-    name: myrepo
-    variable_name: MY_SUPER_VARIABLE_KEY
-    variable_value: abc123
+- name: Add or update a Cloudflare Tunnel
+  code_kaizen.cloudflare.cfd_tunnel:
+    api_token: mytoken
+    account_id: 12345
+    name: my-tunnel
+    config_src: cloudflare
+    tunnel_secret: "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
     state: present
-  register: result
+  register: results
 
-- name: Delete a variable
-  webfx.github_api.repo_variable:
-    access_token: mytoken
-    organization: MyOrganization
-    name: myrepo
-    variable_name: MY_SUPER_VARIABLE_KEY
+- name: Delete a Cloudflare Tunnel
+  code_kaizen.cloudflare.cfd_tunnel:
+    api_token: mytoken
+    account_id: 12345
+    name: my-tunnel
     state: absent
-  register: result
+  register: results
 
-- name: Fetch variables
-  webfx.github_api.repo_variable:
-    access_token: mytoken
-    organization: MyOrganization
-    name: myrepo
+- name: Fetch a Cloudflare Tunnel
+  code_kaizen.cloudflare.cfd_tunnel:
+    api_token: mytoken
+    account_id: 12345
+    name: my-tunnel
     state: fetched
-  register: result
-
+  register: results
 '''
 
 RETURN = '''
 variable:
-  description: Variable information as JSON. See U(https://docs.github.com/en/rest/actions/variables?apiVersion=2022-11-28#create-or-update-an-organization-variable).
+  description: A list of Cloudflare Tunnels as JSON. See U(https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels).
   returned: success and O(state=present)
   type: list
 '''
