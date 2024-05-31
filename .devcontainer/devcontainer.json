@@ -1,0 +1,133 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+{
+	"name": "cloudflare-ansible-collection",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.yml"
+	],
+	"service": "ansible",
+	"workspaceFolder": "/workspace",
+	"postAttachCommand": "git config --global --add safe.directory /workspace;",
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.shellArgs.osx": [],
+				"workbench.colorTheme": "Default Dark+",
+				"workbench.startupEditor": "none",
+				"git.autofetch": true,
+				"editor.formatOnSave": true,
+				"editor.formatOnType": true,
+				"editor.formatOnPaste": false,
+				"editor.renderWhitespace": "all",
+				"code-eol.newlineCharacter": "¬",
+				"code-eol.returnCharacter": "¤",
+				"code-eol.crlfCharacter": "¤¬",
+				"[json]": {
+					"editor.defaultFormatter": "esbenp.prettier-vscode"
+				},
+				"prettier.tabWidth": 4,
+				"prettier.useTabs": true,
+				"[yaml]": {
+					"editor.autoIndent": "advanced",
+					"editor.defaultFormatter": "redhat.vscode-yaml"
+				},
+				"redhat.telemetry.enabled": false,
+				"[python]": {
+					"editor.formatOnType": false
+				},
+				"security.workspace.trust.untrustedFiles": "open",
+				"[markdown]": {
+					"editor.defaultFormatter": "esbenp.prettier-vscode"
+				},
+				"editor.inlineSuggest.enabled": true,
+				"github.copilot.enable": {
+					"*": true,
+					"plaintext": false,
+					"markdown": true,
+					"scminput": false
+				},
+				"git.confirmSync": false,
+				"[dockerfile]": {
+					"editor.defaultFormatter": "ms-azuretools.vscode-docker"
+				},
+				"files.trimTrailingWhitespace": true,
+				"files.insertFinalNewline": true,
+				"editor.rulers": [
+					120
+				],
+				"terminal.integrated.profiles.osx": {
+					"bash": {
+						"path": "bash",
+						"args": [],
+						"icon": "terminal-bash"
+					},
+					"zsh": {
+						"path": "zsh",
+						"args": [
+							"-l"
+						]
+					},
+					"fish": {
+						"path": "fish",
+						"args": [
+							"-l"
+						]
+					},
+					"tmux": {
+						"path": "tmux",
+						"icon": "terminal-tmux"
+					},
+					"pwsh": {
+						"path": "pwsh",
+						"icon": "terminal-powershell"
+					}
+				},
+				"files.exclude": {},
+				"markdown.extension.toc.updateOnSave": false,
+				"window.zoomLevel": -1
+			},
+			"extensions": [
+				"codezombiech.gitignore",
+				"dbaeumer.vscode-eslint",
+				"eamodio.gitlens",
+				"EditorConfig.EditorConfig",
+				"esbenp.prettier-vscode",
+				"foxundermoon.shell-format",
+				"GitHub.codespaces",
+				"GitHub.copilot",
+				"GitHub.copilot-chat",
+				"github.vscode-github-actions",
+				"GitHub.vscode-pull-request-github",
+				"jerriepelser.copy-markdown-as-html",
+				"JoeBerria.statusbarerror",
+				"kenhowardpdx.vscode-gist",
+				"medo64.render-crlf",
+				"mhutchie.git-graph",
+				"ms-azuretools.vscode-docker",
+				"ms-python.autopep8",
+				"ms-python.isort",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-vscode-remote.remote-containers",
+				"ms-vscode-remote.remote-ssh",
+				"ms-vscode-remote.remote-ssh-edit",
+				"ms-vscode-remote.remote-wsl",
+				"ms-vscode-remote.vscode-remote-extensionpack",
+				"ms-vscode.remote-explorer",
+				"ms-vscode.remote-server",
+				"redhat.ansible",
+				"redhat.vscode-yaml",
+				"rogalmic.bash-debug",
+				"stylelint.vscode-stylelint",
+				"svipas.prettier-plus",
+				"timonwong.shellcheck",
+				"yzhang.markdown-all-in-one"
+			]
+		}
+	},
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "root"
+}

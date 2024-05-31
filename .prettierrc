@@ -1,0 +1,11 @@
+{
+  "overrides": [
+    {
+      "files": ["*.yml", "*.yaml", "*.yml.j2", "*.yaml.j2"],
+      "options": {
+        "tabWidth": 2,
+        "useTabs": false
+      }
+    }
+  ]
+}
