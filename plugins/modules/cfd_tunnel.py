@@ -4,6 +4,8 @@
 from __future__ import absolute_import, division, print_function
 from typing import List, Optional
 import traceback
+from ..module_utils.test import test_func
+from ansible.module_utils.basic import AnsibleModule
 __metaclass__ = type
 
 # https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels
@@ -139,7 +141,11 @@ except Exception:
     HAS_GITHUB_PACKAGE = False
 
 
+def testing():
+    return test_func()
+
 def fetch(repo: Repository, variable_name: Optional[str] = None):
+
     results = dict(
         changed=False,
         variables=[]

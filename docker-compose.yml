@@ -1,3 +1,0 @@
-services:
-  ansible:
-    image: ghcr.io/codekaizen-github/cloudflare-ansible-collection:latest

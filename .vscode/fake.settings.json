@@ -3,7 +3,7 @@
     "files.associations": {
         "**/docker-compose.yml": "dockercompose",
         "**/vars/**/*.yml": "yaml",
-        "**/playbooks/*.yml": "ansible",
+        "**/playbooks/*.yml": "ansible"
     },
     "yaml.schemas": {
         "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/vars.json": "**/playbooks/group_vars/**/*.yml"
