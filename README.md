@@ -104,8 +104,22 @@ GNU General Public License v3.0 or later.
 
 See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
 
+<!--start requires_ansible-->
+<!--end requires_ansible-->
 
 <!--start collection content-->
+### Hello_world filter plugins
+filter plugin.
+
+Name | Description
+--- | ---
+code_kaizen.cloudflare.hello_world|Returns Hello message.
+
+### Modules
+Name | Description
+--- | ---
+[code_kaizen.cloudflare.cfd_tunnel](http://example.com/repository/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
+
 <!--end collection content-->
 
 End
