@@ -18,6 +18,7 @@
     "--volume",
     "ansible-dev-tools-container-storage:/var/lib/containers"
   ],
+  "postAttachCommand": "pip install pre-commit; pre-commit install",
   "customizations": {
     "vscode": {
       "extensions": ["redhat.ansible"]

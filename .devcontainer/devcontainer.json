@@ -16,6 +16,7 @@
     "--hostname=ansible-dev-container"
   ],
   "updateRemoteUserUID": true,
+  "postAttachCommand": "pip install pre-commit; pre-commit install",
   "customizations": {
     "vscode": {
       "extensions": [
