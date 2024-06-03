@@ -41,6 +41,43 @@ ansible-galaxy collection install code_kaizen.cloudflare:==X.Y.Z
 
 See [Ansible Using collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html) for more details.
 
+## Contributing
+
+### Running Tests
+
+#### Integration Tests
+
+Run all tox integration tests:
+
+```sh
+python -m tox --ansible --conf tox-ansible.ini
+```
+
+Run tox integration tests for a specific environment:
+
+```sh
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel
+```
+
+Run tox integration tests for a specific scenario:
+
+```sh
+# Unit
+python -m tox --conf tox-ansible.ini --ansible --matrix-scope unit
+# Integration
+python -m tox --conf tox-ansible.ini --ansible --matrix-scope integration
+```
+
+Run tox integration tests for a specific environment and a specific scenario:
+
+```sh
+# Unit
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-scope unit
+# Integratino
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-scope integration
+```
+
+
 ## Release notes
 
 See the [changelog](https://github.com/ansible-collections/REPONAMEHERE/tree/main/CHANGELOG.rst).
