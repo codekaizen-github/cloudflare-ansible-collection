@@ -1,7 +1,13 @@
 {
   "name": "ansible-dev-container-podman",
-  "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
-  "containerUser": "root",
+  // "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
+  "build": {
+    "dockerfile": "../Containerfile",
+    "context": "../.."
+  },
+  "workspaceFolder": "/workspace/ansible_collections/code_kaizen/cloudflare",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/ansible_collections/code_kaizen/cloudflare,type=bind,consistency=cached",
+  "containerUser": "podman",
   "runArgs": [
     "--cap-add=SYS_ADMIN",
     "--cap-add=SYS_RESOURCE",
@@ -18,10 +24,12 @@
     "--volume",
     "ansible-dev-tools-container-storage:/var/lib/containers"
   ],
-  "postAttachCommand": "pip install pre-commit; pre-commit install",
+  "postAttachCommand": "pre-commit install;",
   "customizations": {
     "vscode": {
-      "extensions": ["redhat.ansible"]
+      "extensions": [
+        "redhat.ansible"
+      ]
     }
   }
 }

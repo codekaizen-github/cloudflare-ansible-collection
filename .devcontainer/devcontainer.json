@@ -1,6 +1,12 @@
 {
   "name": "ansible-dev-container-codespaces",
-  "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
+  // "image": "ghcr.io/ansible/community-ansible-dev-tools:latest",
+  "build": {
+    "dockerfile": "./Containerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace/ansible_collections/code_kaizen/cloudflare",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/ansible_collections/code_kaizen/cloudflare,type=bind,consistency=cached",
   "containerUser": "podman",
   "runArgs": [
     "--security-opt",
@@ -16,7 +22,7 @@
     "--hostname=ansible-dev-container"
   ],
   "updateRemoteUserUID": true,
-  "postAttachCommand": "pip install pre-commit; pre-commit install",
+  "postAttachCommand": "pre-commit install;",
   "customizations": {
     "vscode": {
       "extensions": [
