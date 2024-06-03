@@ -2,9 +2,17 @@
 
 This repository contains the `code_kaizen.cloudflare` Ansible Collection.
 
-## Tested with Ansible
+<!--start requires_ansible-->
+## Ansible version compatibility
 
-Tested with ansible-core >=2.14 releases and the current development version of ansible-core.
+This collection has been tested against following Ansible versions: **>=2.14.0**.
+
+For collections that support Ansible 2.9, please ensure you update your `network_os` to use the
+fully qualified collection name (for example, `cisco.ios.ios`).
+Plugins and modules within a collection may be tested with only specific Ansible versions.
+A collection may contain metadata that identifies these versions.
+PEP440 is the schema used to describe the versions of Ansible.
+<!--end requires_ansible-->
 
 ## External requirements
 
@@ -13,6 +21,21 @@ Some modules and plugins require external libraries. Please check the requiremen
 ## Included content
 
 Please check the included content on the [Ansible Galaxy page for this collection](https://galaxy.ansible.com/code_kaizen/cloudflare).
+
+<!--start collection content-->
+### Hello_world filter plugins
+filter plugin.
+
+Name | Description
+--- | ---
+code_kaizen.cloudflare.hello_world|Returns Hello message.
+
+### Modules
+Name | Description
+--- | ---
+[code_kaizen.cloudflare.cfd_tunnel](http://example.com/repository/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
+
+<!--end collection content-->
 
 ## Using this collection
 
@@ -40,6 +63,41 @@ ansible-galaxy collection install code_kaizen.cloudflare:==X.Y.Z
 ```
 
 See [Ansible Using collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html) for more details.
+
+## Contributing
+
+### Running Tests
+
+Run all tox integration tests:
+
+```sh
+python -m tox --ansible --conf tox-ansible.ini
+```
+
+Run tox integration tests for a specific environment:
+
+```sh
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel
+```
+
+Run tox integration tests for a specific scenario:
+
+```sh
+# Unit
+python -m tox --conf tox-ansible.ini --ansible --matrix-scope unit
+# Integration
+python -m tox --conf tox-ansible.ini --ansible --matrix-scope integration
+```
+
+Run tox integration tests for a specific environment and a specific scenario:
+
+```sh
+# Unit
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-scope unit
+# Integratino
+python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-scope integration
+```
+
 
 ## Release notes
 
