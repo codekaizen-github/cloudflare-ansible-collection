@@ -101,7 +101,7 @@ python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-s
 
 ## Release notes
 
-See the [changelog](https://github.com/ansible-collections/REPONAMEHERE/tree/main/CHANGELOG.rst).
+See the [changelog](https://github.com/codekaizen-github/cloudflare-ansible-collection/tree/main/CHANGELOG.rst).
 
 ## Roadmap
 
