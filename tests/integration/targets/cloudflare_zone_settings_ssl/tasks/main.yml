@@ -1,0 +1,47 @@
+---
+- name: Fetch SSL settings
+  cloudflare_zone_settings_ssl:
+    zone: "sandbox.com"
+    api_token: "A3veZ5sTB5Wt-TmAV6oK53F7zVin4vecIuux8Wyy"
+    state: fetched
+  register: fetch_result
+
+- name: Debug fetch_result
+  ansible.builtin.debug:
+    var: fetch_result
+
+- name: Set SSL settings to 'off'
+  cloudflare_zone_settings_ssl:
+    zone: "your-zone-name"
+    api_token: "your-api-token"
+    state: present
+    value: "off"
+  register: set_result
+
+- name: Set SSL settings to 'flexible'
+  cloudflare_zone_settings_ssl:
+    zone: "your-zone-name"
+    api_token: "your-api-token"
+    state: present
+    value: "flexible"
+  register: set_result
+
+- name: Set SSL settings to 'full'
+  cloudflare_zone_settings_ssl:
+    zone: "your-zone-name"
+    api_token: "your-api-token"
+    state: present
+    value: "full"
+  register: set_result
+
+- name: Set SSL settings to 'strict'
+  cloudflare_zone_settings_ssl:
+    zone: "your-zone-name"
+    api_token: "your-api-token"
+    state: present
+    value: "strict"
+  register: set_result
+
+- name: Debug set_result
+  ansible.builtin.debug:
+    var: set_result
