@@ -1,8 +1,8 @@
 ---
 - name: Fetch SSL settings
   cloudflare_zone_settings_ssl:
-    zone: "sandbox.com"
-    api_token: "A3veZ5sTB5Wt-TmAV6oK53F7zVin4vecIuux8Wyy"
+    zone: "your-zone-name"
+    api_token: "your-api-token"
     state: fetched
   register: fetch_result
 
