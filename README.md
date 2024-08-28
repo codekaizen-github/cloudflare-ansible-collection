@@ -33,7 +33,7 @@ code_kaizen.cloudflare.hello_world|Returns Hello message.
 ### Modules
 Name | Description
 --- | ---
-[code_kaizen.cloudflare.cfd_tunnel](http://example.com/repository/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
+[code_kaizen.cloudflare.cfd_tunnel](https://github.com/codekaizen-github/cloudflare-ansible-collection/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
 
 <!--end collection content-->
 
