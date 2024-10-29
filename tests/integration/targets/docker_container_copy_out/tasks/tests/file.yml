@@ -3,369 +3,1027 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+
+# Generates a new container name baseed on a prefix and stores it in cname
 - name: Registering container name
   set_fact:
     cname: "{{ cname_prefix ~ '-f' }}"
+# Add the newly generated cname (above) to a list called cnames
 - name: Registering container name
   set_fact:
     cnames: "{{ cnames + [cname] }}"
 
-# Create container
 
 - name: Create container
   docker_container:
     image: "{{ docker_test_image_alpine }}"
-    command:
-      - /bin/sh
-      - "-c"
-      - >-
-        mkdir -p /test/container/path;
-        echo -n "Content 1" > /test/container/path/file_1;
-        echo -n "Content 2" > /test/container/path/file_2;
-        echo -n "Content 3" > /test/container/path/file_3;
-        mkdir -p /test/container/path/testdir;
-        echo -n "Content 4" > /test/container/path/testdir/file_4;
-        mkdir -p /test/container/path/testdir/nested;
-        echo -n "Content 5" > /test/container/path/testdir/nested/file_5;
-        chown 65534:65534 /test/container/path/testdir/nested/file_5;
-        ln -nfs /test/container/path/testdir /test/container/path/lndir;
-        ln -nfs /test/container/path/file_1 /test/container/path/lnfile;
-        ln -nfs /test/container/path/lndir /test/container/path/lndir2;
-        ln -nfs /test/container/path/lndir/file_4 /test/container/path/lnfile2;
-        sleep 10m;
+    command: /bin/sh
     name: "{{ cname }}"
     state: started
 
-# Create files
 
-# Do not create file 1
-
-# # Create file 2 with different content
-# - name: Create file 2
-#   copy:
-#     dest: "{{ remote_tmp_dir }}/file_2"
-#     content: Not Content 2
-#     mode: 0644
-#   register: create_2
-
-# Create file 3 with same content
-- name: Create file 3
-  copy:
-    dest: "{{ remote_tmp_dir }}/file_3"
-    content: Content 3
-    mode: 0644
-  register: create_3
-
-# Create a directory
-- name: Create directory
-  file:
-    dest: "{{ remote_tmp_dir }}/testdir"
-    state: directory
-
-# Create a nested directory
-- name: Create nested directory
-  file:
-    dest: "{{ remote_tmp_dir }}/testdir/nested"
-    state: directory
-
-- name: Create file in nested directory
-  copy:
-    dest: "{{ remote_tmp_dir }}/testdir/nested/file_5"
-    content: Content 6
-    mode: 0644
-  register: create_file_5
+# first testing case - basic file copying
 
 
-# # Create a different directory
-# - name: Create different directory
-#   file:
-#     dest: "{{ remote_tmp_dir }}/testdir2"
-#     state: directory
+- name: Create directory and file inside container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path &&
+                   echo -n 'Content 1' > /test/container/path/file_1"
+    state: started
+    detach: false
 
-# # Create a file in a directory
-# - name: Create file in directory
-#   copy:
-#     dest: "{{ remote_tmp_dir }}/testdir2/file_4"
-#     content: Content 4
-#     mode: 0644
+# --- Test 1: Check-mode to ensure it indicates a change ---
 
-# # Create a symlink to a directory
-# - name: Create symlink to directory
-#   file:
-#     src: "{{ remote_tmp_dir }}/testdir"
-#     dest: "{{ remote_tmp_dir }}/lndir"
-#     state: link
-
-# # Create a symlink to a file
-# - name: Create symlink to file
-#   file:
-#     src: "{{ remote_tmp_dir }}/file_2"
-#     dest: "{{ remote_tmp_dir }}/lnfile"
-#     state: link
-
-# # Create a broken symlink
-# - name: Create broken symlink
-#   file:
-#     src: "{{ remote_tmp_dir }}/nonexistent"
-#     dest: "{{ remote_tmp_dir }}/broken"
-#     state: link
-#     force: True
-
-# # Create a symlink to a symlink
-# - name: Create symlink to symlink
-#   file:
-#     src: "{{ remote_tmp_dir }}/lndir"
-#     dest: "{{ remote_tmp_dir }}/lndir2"
-#     state: link
-
-# Create a symlink to a file in a symlinked directory
-# - name: Create symlink to file in symlinked directory
-#   file:
-#     src: "{{ remote_tmp_dir }}/lndir/file_4"
-#     dest: "{{ remote_tmp_dir }}/lnfile2"
-#     state: link
-
-# Create a directory that is empty
-# - name: Create directory
-#   file:
-#     dest: "{{ remote_tmp_dir }}/testdir4"
-#     state: directory
-
-################################################################################################
-# Do tests
-
-######################### Invalid params
-
-# - name: Test invalid mode
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/file_1
-#     path: "{{ remote_tmp_dir }}/file_1"
-#     mode: 1234123412341431241
-#   register: result_invalid_mode
-#   ignore_errors: true
-
-# - name: Check results
-#   assert:
-#     that:
-#       - result_invalid_mode is failed
-#       - result_invalid_mode.msg == "\"1234123412341431241\" is not a valid mode"
-
-######################### Copy
-
-- name: Copy file 1
+- name: Copy file from container to host (check mode)
   docker_container_copy_out:
     container: "{{ cname }}"
     container_path: /test/container/path/file_1
     path: "{{ remote_tmp_dir }}/file_1"
-  register: result_1
+  check_mode: true
+  register: check_mode_result
 
-- name: Copy file 1 and rename
+- name: Assert check mode indicates a change
+  assert:
+    that:
+      - check_mode_result.changed
+    msg: "Check-mode did not indicate a change"
+
+# --- Test 2: Checking with another module that the changes have not been actually made. ---
+- name: Check if file does not exist on host (after check-mode)
+  stat:
+    path: "{{ remote_tmp_dir }}/file_1"
+  register: file_stat_check_mode
+
+- name: Assert file does not exist after check-mode
+  assert:
+    that:
+      - not file_stat_check_mode.stat.exists
+    msg: "File exists after check-mode, but it should not"
+
+
+# --- Test 3: Perform the action for real ---
+- name: Copy file from container to host (real mode)
   docker_container_copy_out:
     container: "{{ cname }}"
     container_path: /test/container/path/file_1
-    path: "{{ remote_tmp_dir }}/file_renamed_1"
-  register: result_1
+    path: "{{ remote_tmp_dir }}/file_1"
+  register: real_mode_result
 
-# - name: Copy file 2
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/file_2
-#     path: "{{ remote_tmp_dir }}/file_2"
-#   become: True
-#   register: result_2
-
-# - name: Copy file 3
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/file_3
-#     path: "{{ remote_tmp_dir }}/file_3"
-#   register: result_3a
-
-# - name: Copy file 3 again
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/file_3
-#     path: "{{ remote_tmp_dir }}/file_3"
-#   register: result_3b
-
-# - name: Copy directory with nesting to a directory with nesting that already exists
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/testdir
-#     path: "{{ remote_tmp_dir }}/testdir"
-#   become: True
-#   register: result_dir_nesting_exists
-
-# WITHOUT DOT .
-- name: Copy directory that only contains a file to a directory that already exists and only contains a file
-  docker_container_copy_out:
-    container: "{{ cname }}"
-    container_path: /test/container/path/testdir/nested
-    path: "{{ remote_tmp_dir }}/testdir/nested"
-  register: result_dir_only_file_exists
-
-# WITH DOT .
-- name: Copy directory that only contains a file to a directory that already exists and only contains a file but use a dot
-  docker_container_copy_out:
-    container: "{{ cname }}"
-    container_path: /test/container/path/testdir/nested/.
-    path: "{{ remote_tmp_dir }}/testdir/nested"
-    # Note: If you specify archive_mode, `become: True` is required because only root user can change privs.
-    # archive_mode: True
-    # group_id: 65534
-    # owner_id: 65534
-  register: result_dir_only_file_exists
-
-# - name: Copy directory with nesting to a directory that already exists and only contains a file
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/testdir
-#     path: "{{ remote_tmp_dir }}/testdir2"
-#   become: True
-#   register: result_dir_nesting_file_exists_but_different
-
-# Behavior should be the same as below (after testing with Docker cp). It should create the new directory and expand the contents there.
-- name: Copy directory with nesting to a directory that does **not** exist and do not use dot
-  docker_container_copy_out:
-    container: "{{ cname }}"
-    container_path: /test/container/path/testdir
-    path: "{{ remote_tmp_dir }}/testdir3"
-  register: result_dir_nesting_does_not_exist
-
-# Behavior should be the same as above (after testing with Docker cp). It should create the new directory and expand the contents there.
-- name: Copy directory with nesting to a directory that does not exist using dot
-  docker_container_copy_out:
-    container: "{{ cname }}"
-    container_path: /test/container/path/testdir/.
-    path: "{{ remote_tmp_dir }}/testdir4"
-  register: result_dir_nesting_does_not_exist
-
-# - name: Copy directory with nesting to a directory that does exist but is empty
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/testdir
-#     path: "{{ remote_tmp_dir }}/testdir4"
-#     # force: True
-#     archive_mode: True
-#     group_id: 1001
-#     mode: '0755'
-#   become: True # https://stackoverflow.com/a/7245654
-#   register: result_dir_nesting_does_exist_empty
-
-
-# - name: Copy symlink to directory
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/lndir
-#     path: "{{ remote_tmp_dir }}/lndir"
-#   become: True
-#   register: result_lndir
-
-# - name: Copy symlink to file
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/lnfile
-#     path: "{{ remote_tmp_dir }}/lnfile"
-#   become: True
-#   register: result_lnfile
-
-# - name: Copy symlink to symlink
-#   docker_container_copy_out:
-#     container: "{{ cname }}"
-#     container_path: /test/container/path/lndir2
-#     path: "{{ remote_tmp_dir }}/lndir2"
-#   become: True
-#   register: result_lndir2
-
-# - name: Stat file 1
-#   stat:
-#     path: "{{ remote_tmp_dir }}/file_1"
-#   register: stat_1
-
-# - name: Stat file 2
-#   stat:
-#     path: "{{ remote_tmp_dir }}/file_2"
-#   register: stat_2
-
-# - name: Stat file 3
-#   stat:
-#     path: "{{ remote_tmp_dir }}/file_3"
-#   register: stat_3
-
-# - name: Stat directory
-#   stat:
-#     path: "{{ remote_tmp_dir }}/testdir"
-#   register: stat_dir
-
-# - name: Stat nested directory
-#   stat:
-#     path: "{{ remote_tmp_dir }}/testdir/nested"
-#   register: stat_nested_dir
-
-# - name: Stat symlink to directory
-#   stat:
-#     path: "{{ remote_tmp_dir }}/lndir"
-#   register: stat_lndir
-
-# - name: Stat symlink to file
-#   stat:
-#     path: "{{ remote_tmp_dir }}/lnfile"
-#   register: stat_lnfile
-
-# - name: Stat symlink to symlink
-#   stat:
-#     path: "{{ remote_tmp_dir }}/lndir2"
-#   register: stat_lndir2
-
-# The copy should MAKE this directory
-# - name: Stat directory that did not use to exist but does now
-#   stat:
-#     path: "{{ remote_tmp_dir }}/testdir3"
-#   register: stat_dir3
-
-# - name: Stat directory existed and was empty but now has files
-#   stat:
-#     path: "{{ remote_tmp_dir }}/testdir4"
-#   register: stat_dir4
-
-
-- name: Check results
+- name: Assert real mode indicates a change
   assert:
     that:
-      # - result_1 is success
-      # - result_2 is success
-      # - result_3a is success
-      # - stat_1.stat.exists
-      # - stat_2.stat.exists
-      # - stat_3.stat.exists
-      # - stat_1.stat.size == 9
-      # - stat_2.stat.size == 9
-      # - stat_3.stat.size == 9
-      # - create_2.checksum != stat_2.stat.checksum
-      # - create_3.checksum == stat_3.stat.checksum
-      # - result_dir_nesting_exists is success
-      # - result_dir_only_file_exists is success
-      # - result_lndir is success
-      # - result_lnfile is success
-      # - result_lndir2 is success
-      # - stat_dir.stat.exists
-      # - stat_nested_dir.stat.exists
-      # - stat_lndir.stat.exists
-      # - stat_lnfile.stat.exists
-      # - stat_lndir2.stat.exists
-      # - stat_dir.stat.islnk == false
-      # - stat_nested_dir.stat.islnk == false
-      # - stat_lndir.stat.islnk
-      # - stat_lnfile.stat.islnk
-      # - stat_lndir2.stat.islnk
-      # - stat_dir3.stat.exists
-      # - stat_dir3.stat.isdir
-      # - stat_dir4.stat.exists
-      # - stat_dir4.stat.isdir
+      - real_mode_result.changed
+    msg: "Real mode did not indicate a change"
 
-################################################################################################
-# Cleanup
+# --- Test 4: Check file exists and content is correct (Check with another module that the changes have been actually made.) ---
+- name: Check if file exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/file_1"
+  register: file_stat
+
+- name: Assert file exists
+  assert:
+    that:
+      - file_stat.stat.exists
+      - file_stat.stat.size > 0
+
+- name: Read file content on host
+  slurp:
+    src: "{{ remote_tmp_dir }}/file_1"
+  register: file_content
+  when: file_stat.stat.exists
+
+- name: Assert file content matches
+  assert:
+    that:
+      - file_content.content | b64decode == "Content 1"
+    msg: "File content does not match expected value"
+
+# --- Test 5: Check-mode again, should indicate no change ---
+- name: Copy file from container to host again (check mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_1
+    path: "{{ remote_tmp_dir }}/file_1"
+  check_mode: true
+  register: second_check_mode_result
+
+- name: Assert no change in second check mode
+  assert:
+    that:
+      - not second_check_mode_result.changed
+    msg: "Check mode indicated a change when none was expected"
+
+# --- Test 6: Real mode again, should indicate no change ---
+- name: Copy file from container to host again (real mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_1
+    path: "{{ remote_tmp_dir }}/file_1"
+  register: second_real_mode_result
+
+- name: Assert no change in second real mode
+  assert:
+    that:
+      - not second_real_mode_result.changed
+    msg: "Real mode indicated a change when none was expected"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# second testing case - follow symlink on container and copy file (follow: true)
+
+- name: Create symlink and file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path &&
+                   echo -n 'Content 2' > /test/container/path/file_2 &&
+                   ln -s /test/container/path/file_2 /test/container/path/symlink_file"
+    state: started
+    detach: false
+
+# --- Test 1: Copy symlink file (check mode) ---
+- name: Copy symlink from container to host (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: true
+  check_mode: true
+  register: check_mode_result_symlink
+
+- name: Assert check mode indicates a change for symlink
+  assert:
+    that:
+      - check_mode_result_symlink.changed
+
+# --- Test 2: Ensure no changes were made ---
+- name: Check if symlink file does not exist after check-mode
+  stat:
+    path: "{{ remote_tmp_dir }}/symlink_file"
+  register: symlink_stat_check_mode
+
+- name: Assert symlink does not exist after check-mode
+  assert:
+    that:
+      - not symlink_stat_check_mode.stat.exists
+
+# --- Test 3: Perform action for real ---
+- name: Copy symlink from container to host (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: true
+  register: real_mode_result_symlink
+
+- name: Assert real mode indicates a change
+  assert:
+    that:
+      - real_mode_result_symlink.changed
+
+# --- Test 4: Ensure file exists and content is correct ---
+- name: Check if symlink file exists
+  stat:
+    path: "{{ remote_tmp_dir }}/symlink_file"
+  register: symlink_file_stat
+
+- name: Read symlink file content
+  slurp:
+    src: "{{ remote_tmp_dir }}/symlink_file"
+  register: symlink_file_content
+  when: symlink_file_stat.stat.exists
+
+- name: Assert symlink file exists and has correct content
+  assert:
+    that:
+      - symlink_file_stat.stat.exists
+      - symlink_file_stat.stat.size > 0
+      - symlink_file_content.content | b64decode == "Content 2"
+
+# --- Test 5: Check-mode again, no change expected ---
+- name: Copy symlink from container to host again (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: true
+  check_mode: true
+  register: second_check_mode_result_symlink
+
+- name: Assert no change in second check mode
+  assert:
+    that:
+      - not second_check_mode_result_symlink.changed
+
+# --- Test 6: Real mode again, no change expected ---
+- name: Copy symlink from container to host again (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: true
+  register: second_real_mode_result_symlink
+
+- name: Assert no change in second real mode
+  assert:
+    that:
+      - not second_real_mode_result_symlink.changed
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# third testing case - copy symlink from container to managed node (follow: false)
+
+- name: Create symlink and file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path &&
+                   echo -n 'Content 3' > /test/container/path/file_3 &&
+                   ln -s /test/container/path/file_3 /test/container/path/symlink_file"
+    state: started
+    detach: false
+
+# --- Test 1: Copy symlink without following it (check mode) ---
+- name: Copy symlink from container without following (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: false
+  check_mode: true
+  register: check_mode_result_no_follow
+
+- name: Assert check mode indicates a change (no follow)
+  assert:
+    that:
+      - check_mode_result_no_follow.changed
+
+# --- Test 2: Ensure no changes were made (check-mode) ---
+- name: Check if symlink file does not exist after check-mode (no follow)
+  stat:
+    path: "{{ remote_tmp_dir }}/symlink_file"
+  register: no_follow_stat_check_mode
+
+- name: Assert symlink does not exist after check-mode (no follow)
+  assert:
+    that:
+      - not no_follow_stat_check_mode.stat.exists
+
+# --- Test 3: Perform action for real ---
+- name: Copy symlink from container without following (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: false
+  register: real_mode_result_no_follow
+
+- name: Assert real mode indicates a change (no follow)
+  assert:
+    that:
+      - real_mode_result_no_follow.changed
+
+# --- Test 4: Ensure symlink was copied, not the target ---
+- name: Check if symlink file was copied
+  stat:
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: false
+  register: symlink_no_follow_stat
+
+- name: Assert symlink file exists (no follow)
+  assert:
+    that:
+      - symlink_no_follow_stat.stat.islnk
+    msg: "File is not a symlink, but it should be"
+
+# --- Test 5: Check-mode again, no change expected --- (CHATGPT - this part is indicating a change. Does this mean that the docker_container_copy_out module would need to be fixed? Like the check mode portion needs fixed in regards to symlinks maybe?)
+- name: Copy symlink from container without following again (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: false
+  check_mode: true
+  register: second_check_mode_result_no_follow
+
+
+- name: Assert no change in second check mode (no follow)
+  assert:
+    that:
+      - not second_check_mode_result_no_follow.changed
+
+# --- Test 6: Real mode again, no change expected ---
+- name: Copy symlink from container without following again (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/symlink_file
+    path: "{{ remote_tmp_dir }}/symlink_file"
+    follow: false
+  register: second_real_mode_result_no_follow
+
+- name: Assert no change in second real mode (no follow)
+  assert:
+    that:
+      - not second_real_mode_result_no_follow.changed
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+
+# fourth testing case - archive mode
+
+# --- Step 1: Check-mode to ensure it indicates a change ---
+
+- name: Create directory structure and file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path/subdir &&
+                   echo -n 'Content 3' > /test/container/path/file_3 &&
+                   ln -s /test/container/path/file_3 /test/container/path/file_symlink &&
+                   chmod 644 /test/container/path/file_3 &&
+                   chmod 755 /test/container/path &&
+                   chmod 755 /test/container/path/subdir"
+    state: started
+    detach: false
+
+- name: Copy directory with archive mode from container to host (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path
+    path: "{{ remote_tmp_dir }}/path"
+    archive_mode: true
+  become: true
+  check_mode: true
+  register: check_mode_result
+
+- name: Assert check mode indicates a change
+  assert:
+    that:
+      - check_mode_result.changed
+    msg: "Check-mode did not indicate a change"
+
+
+# --- Step 2: Check with another module that the changes have not been actually made ---
+
+- name: Check if file does not exist on host (after check-mode)
+  stat:
+    path: "{{ remote_tmp_dir }}/path/file_3"
+  register: file_stat_check_mode
+
+- name: Assert file does not exist after check-mode
+  assert:
+    that:
+      - not file_stat_check_mode.stat.exists
+    msg: "File exists after check-mode, but it should not"
+
+
+# --- Step 3: Perform the action for real ---
+
+- name: Copy directory with archive mode from container to host (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path
+    path: "{{ remote_tmp_dir }}/path"
+    archive_mode: true
+  become: true
+  register: real_mode_result
+
+- name: Assert real mode indicates a change
+  assert:
+    that:
+      - real_mode_result.changed
+    msg: "Real mode did not indicate a change"
+
+
+# --- Step 4: Check that the changes have been made ---
+
+- name: Check if file exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/path/file_3"
+  register: archive_file_stat
+
+- name: Check if directory exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/path"
+  register: archive_dir_stat
+
+- name: Check if subdirectory exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/path/subdir"
+  register: archive_subdir_stat
+
+- name: Check if symlink file exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/path/file_symlink"
+  register: symlink_file_stat
+
+- name: Check if symlink exists without following
+  stat:
+    path: "{{ remote_tmp_dir }}/path/file_symlink"
+    follow: false
+  register: symlink_stat
+
+- name: Read file content on host
+  slurp:
+    src: "{{ remote_tmp_dir }}/path/file_3"
+  register: archive_file_content
+  when: archive_file_stat.stat.exists
+
+- name: Assert file, directory, and subdirectory exist and have correct content and permissions
+  assert:
+    that:
+      - archive_file_stat.stat.exists
+      - archive_file_stat.stat.size > 0
+      - archive_file_content.content | b64decode == "Content 3"
+      - archive_file_stat.stat.mode == "0644"
+      - archive_dir_stat.stat.exists
+      - archive_dir_stat.stat.mode == "0755"
+      - archive_subdir_stat.stat.exists
+      - archive_subdir_stat.stat.mode == "0755"
+      - symlink_stat.stat.exists
+      - symlink_stat.stat.islnk
+      - symlink_stat.stat.lnk_target == "/test/container/path/file_3"
+    msg: "File, directory, or subdirectory was not copied correctly or has unexpected content/permissions"
+
+
+# --- Step 5: Check-mode again, should indicate no change
+
+- name: Copy directory with archive mode again (check mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path
+    path: "{{ remote_tmp_dir }}/path"
+    archive_mode: true
+  check_mode: true
+  become: true
+  register: second_check_mode_result
+
+- name: Assert no change in second check mode
+  assert:
+    that:
+      - not second_check_mode_result.changed
+    msg: "Check-mode indicated a change when none was expected"
+
+
+# --- Step 6: Real mode again, should indicate no change ---
+
+- name: Copy directory with archive mode again (real mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path
+    path: "{{ remote_tmp_dir }}/path"
+    archive_mode: true
+  become: true
+  register: second_real_mode_result
+
+- name: Assert no change in second real mode
+  assert:
+    that:
+      - not second_real_mode_result.changed
+    msg: "Real mode indicated a change when none was expected"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# fifth testing case - ownership and permissions
+
+# --- Test 1: Create file with specific permissions in the container ---
+- name: Create file in container with specific permissions
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path &&
+                   echo -n 'Content 4' > /test/container/path/file_4 &&
+                   chmod 600 /test/container/path/file_4"
+    state: started
+    detach: false
+
+# --- Test 2: Check-mode to ensure it indicates a change ---
+- name: Copy file with specific ownership and permissions from container to host (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_4
+    path: "{{ remote_tmp_dir }}/file_4"
+    owner_id: 2000
+    group_id: 2000
+    mode: '600'
+  become: yes
+  check_mode: true
+  register: check_mode_result
+
+- name: Assert check-mode indicates a change
+  assert:
+    that:
+      - check_mode_result.changed
+    msg: "Check-mode did not indicate a change"
+
+# --- Test 3: Check with another module that the changes have not been made ---
+- name: Check if file does not exist on host (after check-mode)
+  stat:
+    path: "{{ remote_tmp_dir }}/file_4"
+  register: file_stat_check_mode
+
+- name: Assert file does not exist after check-mode
+  assert:
+    that:
+      - not file_stat_check_mode.stat.exists
+    msg: "File exists after check-mode, but it should not"
+
+# --- Test 4: Perform the action for real ---
+- name: Copy file with specific ownership and permissions from container to host (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_4
+    path: "{{ remote_tmp_dir }}/file_4"
+    owner_id: 2000
+    group_id: 2000
+    mode: '600'
+  become: yes
+  register: real_mode_result
+
+- name: Assert real mode indicates a change
+  assert:
+    that:
+      - real_mode_result.changed
+    msg: "Real mode did not indicate a change"
+
+# --- Test 5: Check with another module that the changes have been made ---
+- name: Check if file exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/file_4"
+  register: file_stat
+
+- name: Assert file exists and has correct permissions
+  assert:
+    that:
+      - file_stat.stat.exists
+      - file_stat.stat.mode == "0600"
+    msg: "File ownership and permissions were not set correctly"
+
+# --- Test 6: Check-mode again, should indicate no change ---
+- name: Copy file with specific ownership and permissions again (check mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_4
+    path: "{{ remote_tmp_dir }}/file_4"
+    owner_id: 2000
+    group_id: 2000
+    mode: '600'
+  become: yes
+  check_mode: true
+  register: second_check_mode_result
+
+- name: Assert no change in second check-mode
+  assert:
+    that:
+      - not second_check_mode_result.changed
+    msg: "Check mode indicated a change when none was expected"
+
+# --- Test 7: Real mode again, should indicate no change ---
+- name: Copy file with specific ownership and permissions again (real mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_4
+    path: "{{ remote_tmp_dir }}/file_4"
+    owner_id: 2000
+    group_id: 2000
+    mode: '600'
+  become: yes
+  register: second_real_mode_result
+
+- name: Assert no change in second real mode
+  assert:
+    that:
+      - not second_real_mode_result.changed
+    msg: "Real mode indicated a change when none was expected"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# sixth testing case - force option 
+
+# Set up
+
+- name: Create files in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/path && echo -n 'Content 5' > /test/container/path/file_5 &&
+                  mkdir -p /test/container/path_2 && echo -n 'Content 6' > /test/container/path_2/file_5"
+    state: started
+    detach: false
+
+# --- Test 1: Check-mode to ensure it indicates a change ---
+- name: Copy file from container to host (check mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path_2/file_5
+    path: "{{ remote_tmp_dir }}/file_5"
+  check_mode: true
+  register: check_mode_result
+
+- name: Assert check mode indicates a change
+  assert:
+    that:
+      - check_mode_result.changed
+    msg: "Check-mode did not indicate a change"
+
+# --- Test 2: Checking with another module that the changes have not been actually made ---
+- name: Check if file does not exist on host (after check-mode)
+  stat:
+    path: "{{ remote_tmp_dir }}/file_5"
+  register: file_stat_check_mode
+
+- name: Assert file does not exist after check-mode
+  assert:
+    that:
+      - not file_stat_check_mode.stat.exists
+    msg: "File exists after check-mode, but it should not"
+
+# --- copy file to host that will be overwritten
+
+- name: Copy file from container
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path/file_5
+    path: "{{ remote_tmp_dir }}/file_5"
+
+# ---
+
+# --- Test 3: Perform the action for real ---
+- name: Copy file from container to host (real mode)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path_2/file_5
+    path: "{{ remote_tmp_dir }}/file_5"
+    force: true
+  register: real_mode_result
+
+- name: Assert real mode indicates a change
+  assert:
+    that:
+      - real_mode_result.changed
+    msg: "Real mode did not indicate a change"
+
+# --- Test 4: Check file exists and content is correct ---
+- name: Check if file exists on host
+  stat:
+    path: "{{ remote_tmp_dir }}/file_5"
+  register: force_file_stat
+
+- name: Assert file exists
+  assert:
+    that:
+      - force_file_stat.stat.exists
+      - force_file_stat.stat.size > 0
+
+- name: Read file content on host
+  slurp:
+    src: "{{ remote_tmp_dir }}/file_5"
+  register: force_file_content
+  when: force_file_stat.stat.exists
+
+- name: Assert file content matches
+  assert:
+    that:
+      - force_file_content.content | b64decode == "Content 6"
+    msg: "File content does not match expected value"
+
+# --- Test 5: Check-mode again, should indicate no change ---
+- name: Copy file from container to host again (check mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path_2/file_5
+    path: "{{ remote_tmp_dir }}/file_5"
+    force: true
+  check_mode: true
+  register: second_check_mode_result
+
+- name: Assert no change in second check mode
+  assert:
+    that:
+      - not second_check_mode_result.changed
+    msg: "Check mode indicated a change when none was expected"
+
+# --- Test 6: Real mode again, should indicate no change ---
+- name: Copy file from container to host again (real mode, no change expected)
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/path_2/file_5
+    path: "{{ remote_tmp_dir }}/file_5"
+  register: second_real_mode_result
+
+- name: Assert no change in second real mode
+  assert:
+    that:
+      - not second_real_mode_result.changed
+    msg: "Real mode indicated a change when none was expected"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# --- seventh testing case - local symlink handling, follow and update file on managed node, local_follow = true ---
+
+# --- Test 1: Create the target file and symlink on the host (managed node) ---
+- name: Create target file and symlink on the host
+  become: true
+  shell: |
+    mkdir -p {{ remote_tmp_dir }}/test/eighth_case &&
+    echo -n 'Old Content' > {{ remote_tmp_dir }}/test/eighth_case/real_file &&
+    ln -s {{ remote_tmp_dir }}/test/eighth_case/real_file {{ remote_tmp_dir }}/test/eighth_case/local_symlink
+
+# --- Create file in the container
+- name: Create file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/eighth_case &&
+                   echo -n 'New Content' > /test/container/eighth_case/file_to_copy"
+    state: started
+    detach: false
+
+# --- Test 2: Check-mode before copying file from container to host symlink ---
+- name: Copy file from container to host symlink (check mode)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/eighth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/eighth_case/local_symlink"
+  check_mode: true
+  register: symlink_check_mode_result
+
+- name: Assert check mode indicates a change for symlink copy
+  assert:
+    that:
+      - symlink_check_mode_result.changed
+    msg: "Check-mode did not indicate a change for symlink copy"
+
+# --- Test 3: Check if real file content remains unchanged after check-mode ---
+- name: Check real file content on the host (after check-mode)
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/eighth_case/real_file"
+  register: real_file_content_check_mode
+
+- name: Assert real file content is still old after check-mode
+  assert:
+    that:
+      - real_file_content_check_mode.content | b64decode == "Old Content"
+    msg: "Real file content was unexpectedly modified after check-mode"
+
+# --- Test 4: Create file in the container (new content) ---
+- name: Create file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/eighth_case &&
+                   echo -n 'New Content' > /test/container/eighth_case/file_to_copy"
+    state: started
+    detach: false
+
+# --- Test 5: Copy file from container to symlink on the host (real mode) ---
+- name: Copy file from container to host symlink (real mode)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/eighth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/eighth_case/local_symlink"
+  register: symlink_real_mode_result
+
+- name: Assert real mode indicates a change for symlink copy
+  assert:
+    that:
+      - symlink_real_mode_result.changed
+    msg: "Real mode did not indicate a change for symlink copy"
+
+# --- Test 6: Check the content of the real file on the host (after real mode) ---
+- name: Check content of the real file on the host
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/eighth_case/real_file"
+  register: real_file_content
+
+- name: Assert the content of the real file is updated correctly
+  assert:
+    that:
+      - real_file_content.content | b64decode == "New Content"
+    msg: "The content of the real file was not updated correctly"
+
+# --- Test 7: Check-mode again, no change expected ---
+- name: Copy file from container to host symlink again (check mode, no change expected)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/eighth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/eighth_case/local_symlink"
+  check_mode: true
+  register: second_symlink_check_mode_result
+
+- name: Assert check mode indicates no change (symlink)
+  assert:
+    that:
+      - not second_symlink_check_mode_result.changed
+    msg: "Check-mode indicated a change for symlink when none was expected"
+
+# --- Test 8: Real mode again, no change expected ---
+- name: Copy file from container to host symlink again (real mode, no change expected)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/eighth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/eighth_case/local_symlink"
+  register: second_symlink_real_mode_result
+
+- name: Assert real mode indicates no change (symlink)
+  assert:
+    that:
+      - not second_symlink_real_mode_result.changed
+    msg: "Real mode indicated a change for symlink when none was expected"
+
+# --- Test 9: Check if real file content remains correct after second operation ---
+- name: Check content of the real file on the host (after second operation)
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/eighth_case/real_file"
+  register: real_file_content_second_check
+
+- name: Assert the real file content is still correct
+  assert:
+    that:
+      - real_file_content_second_check.content | b64decode == "New Content"
+    msg: "The content of the real file was unexpectedly modified after second operation"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
+
+
+# --- eighth testing case - local symlink handling, follow and update file on managed node, local_follow = false ---
+
+# --- Test 1: Create the target file and symlink on the host (managed node) ---
+- name: Create target file and symlink on the host
+  become: true
+  shell: |
+    mkdir -p {{ remote_tmp_dir }}/test/ninth_case &&
+    echo -n 'Old Content' > {{ remote_tmp_dir }}/test/ninth_case/real_file &&
+    ln -s {{ remote_tmp_dir }}/test/ninth_case/real_file {{ remote_tmp_dir }}/test/ninth_case/local_symlink
+
+# --- Create file in the container
+- name: Create file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/ninth_case &&
+                   echo -n 'New Content' > /test/container/ninth_case/file_to_copy"
+    state: started
+    detach: false
+
+# --- Test 2: Check-mode before copying file from container to host symlink ---
+- name: Copy file from container to host symlink (check mode)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/ninth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/ninth_case/local_symlink"
+    local_follow: false
+  check_mode: true
+  register: symlink_check_mode_result
+
+- name: Assert check mode indicates a change for symlink copy
+  assert:
+    that:
+      - symlink_check_mode_result.changed
+    msg: "Check-mode did not indicate a change for symlink copy"
+
+# --- Test 3: Check if real file content remains unchanged after check-mode ---
+- name: Check real file content on the host (after check-mode)
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/ninth_case/real_file"
+  register: real_file_content_check_mode
+
+- name: Assert real file content is still old after check-mode
+  assert:
+    that:
+      - real_file_content_check_mode.content | b64decode == "Old Content"
+    msg: "Real file content was unexpectedly modified after check-mode"
+
+# --- Test 4: Create file in the container (new content) ---
+- name: Create file in container
+  docker_container:
+    name: "{{ cname }}"
+    command: >
+      /bin/sh -c "mkdir -p /test/container/ninth_case &&
+                   echo -n 'New Content' > /test/container/ninth_case/file_to_copy"
+    state: started
+    detach: false
+
+# --- Test 5: Copy file from container to symlink on the host (real mode) ---
+- name: Copy file from container to host symlink (real mode)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/ninth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/ninth_case/local_symlink"
+    local_follow: false
+  register: symlink_real_mode_result
+
+- name: Assert real mode indicates a change for symlink copy
+  assert:
+    that:
+      - symlink_real_mode_result.changed
+    msg: "Real mode did not indicate a change for symlink copy"
+
+# --- Test 6: Check the content of the real file on the host (after real mode) ---
+- name: Check content of the real file on the host
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/ninth_case/real_file"
+  register: real_file_content
+
+- name: Assert the content of the real file is updated correctly
+  assert:
+    that:
+      - real_file_content.content | b64decode == "New Content"
+    msg: "The content of the real file was not updated correctly"
+
+# --- Test 7: Check-mode again, no change expected ---
+- name: Copy file from container to host symlink again (check mode, no change expected)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/ninth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/ninth_case/local_symlink"
+    local_follow: false
+  check_mode: true
+  register: second_symlink_check_mode_result
+
+- name: Assert check mode indicates no change (symlink)
+  assert:
+    that:
+      - not second_symlink_check_mode_result.changed
+    msg: "Check-mode indicated a change for symlink when none was expected"
+
+# --- Test 8: Real mode again, no change expected ---
+- name: Copy file from container to host symlink again (real mode, no change expected)
+  become: true
+  docker_container_copy_out:
+    container: "{{ cname }}"
+    container_path: /test/container/ninth_case/file_to_copy
+    path: "{{ remote_tmp_dir }}/test/ninth_case/local_symlink"
+    local_follow: false
+  register: second_symlink_real_mode_result
+
+- name: Assert real mode indicates no change (symlink)
+  assert:
+    that:
+      - not second_symlink_real_mode_result.changed
+    msg: "Real mode indicated a change for symlink when none was expected"
+
+# --- Test 9: Check if real file content remains correct after second operation ---
+- name: Check content of the real file on the host (after second operation)
+  slurp:
+    src: "{{ remote_tmp_dir }}/test/ninth_case/real_file"
+  register: real_file_content_second_check
+
+- name: Assert the real file content is still correct
+  assert:
+    that:
+      - real_file_content_second_check.content | b64decode == "New Content"
+    msg: "The content of the real file was unexpectedly modified after second operation"
+
+# --- Cleanup: Remove all contents within the remote tmp directory ---
+- name: Cleanup all contents within the remote temporary directory
+  become: true
+  shell: "rm -rf {{ remote_tmp_dir }}/*"
+  ignore_errors: true
 
 - name: Remove container
   docker_container:
