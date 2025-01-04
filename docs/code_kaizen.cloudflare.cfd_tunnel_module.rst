@@ -139,6 +139,7 @@ Parameters
                 </td>
                 <td>
                         <div>Sets the password required to run a locally-managed tunnel.</div>
+                        <div>Must be at least 32 bytes and encoded as a base64 string.</div>
                 </td>
             </tr>
     </table>
@@ -219,4 +220,4 @@ Authors
 ~~~~~~~
 
 - Andrew Dawes (@andrewjdawes)
-- Kaitlyn Wyland (kwyland22)
+- Kaitlyn Wyland (@kwyland22)

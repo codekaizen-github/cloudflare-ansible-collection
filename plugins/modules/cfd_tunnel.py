@@ -44,6 +44,7 @@ options:
   tunnel_secret:
     description:
       - Sets the password required to run a locally-managed tunnel.
+      - Must be at least 32 bytes and encoded as a base64 string.
     type: str
     required: false
   state:
@@ -57,7 +58,7 @@ requirements:
 - requests>=2.22.0
 author:
 - Andrew Dawes (@andrewjdawes)
-- Kaitlyn Wyland (kwyland22)
+- Kaitlyn Wyland (@kwyland22)
 """
 
 EXAMPLES = """
@@ -99,7 +100,7 @@ CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts"
 
 
 def fetch_tunnel(module, api_token, account_id, name):
-    """Fetches a tunnel by name, handling pagination."""
+    """Fetches a tunnel by name and returns the tunnel data."""
     url = f"{CF_API_BASE}/{account_id}/tunnels"
     headers = {"Authorization": f"Bearer {api_token}"}
     params = {"page": 1, "per_page": 50}
@@ -113,17 +114,17 @@ def fetch_tunnel(module, api_token, account_id, name):
             # Check if the desired tunnel exists on this page
             for tunnel in tunnels:
                 if tunnel["name"] == name:
-                    module.exit_json(changed=False, tunnel=tunnel)
+                    return tunnel
 
             # Check if there are more pages
             pagination = response.json().get("result_info", {})
             if pagination.get("page") >= pagination.get("total_pages", 1):
-                break  # No more pages to fetch
+                break
 
             # Move to the next page
             params["page"] += 1
 
-        module.fail_json(msg="Tunnel not found.")
+        return None
 
     except requests.exceptions.RequestException as e:
         module.fail_json(msg=f"Error fetching tunnel: {str(e)}")
@@ -146,10 +147,8 @@ def create_tunnel(
     data = {
         "name": name,
         "config_src": config_src,
+        "tunnel_secret": tunnel_secret,
     }
-
-    if tunnel_secret:
-        data["secret"] = tunnel_secret
 
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -164,8 +163,35 @@ def create_tunnel(
         module.fail_json(msg=f"Error creating tunnel: {str(e)}")
 
 
+def update_tunnel(module, api_token, account_id, tunnel_id, config_src, tunnel_secret):
+    """Updates an existing Cloudflare Tunnel."""
+    url = f"{CF_API_BASE}/{account_id}/cfd_tunnel/{tunnel_id}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Prepare the data to update
+    data = {}
+    if tunnel_secret:
+        data["tunnel_secret"] = tunnel_secret
+
+    try:
+        response = requests.patch(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json().get("result")
+        module.exit_json(changed=True, tunnel=result)
+
+    except requests.exceptions.HTTPError as e:
+        module.fail_json(
+            msg=(f"HTTP Error: {e.response.status_code} - " f"{e.response.text}"),
+        )
+    except requests.exceptions.RequestException as e:
+        module.fail_json(msg=f"Error updating tunnel: {str(e)}")
+
+
 def delete_tunnel(module, api_token, account_id, name):
-    """Deletes a tunnel by name, handling pagination."""
+    """Deletes a tunnel by name"""
     url = f"{CF_API_BASE}/{account_id}/tunnels"
     headers = {"Authorization": f"Bearer {api_token}"}
     params = {"page": 1, "per_page": 50}
@@ -234,16 +260,39 @@ def main():
     state = module.params["state"]
 
     if state == "fetched":
-        fetch_tunnel(module, api_token, account_id, name)
+        tunnel = fetch_tunnel(module, api_token, account_id, name)
+        if tunnel:
+            # Tunnel found
+            module.exit_json(changed=False, tunnel=tunnel)
+        else:
+            # Tunnel not found, fail the task
+            module.fail_json(msg=f"Tunnel with name '{name}' not found.")
     elif state == "present":
-        create_tunnel(
-            module,
-            api_token,
-            account_id,
-            name,
-            config_src,
-            tunnel_secret,
-        )
+        try:
+            existing_tunnel = fetch_tunnel(module, api_token, account_id, name)
+
+            if existing_tunnel:
+                # Tunnel exists; update it
+                update_tunnel(
+                    module,
+                    api_token,
+                    account_id,
+                    existing_tunnel["id"],
+                    config_src,
+                    tunnel_secret,
+                )
+            else:
+                # Tunnel does not exist; create it
+                create_tunnel(
+                    module,
+                    api_token,
+                    account_id,
+                    name,
+                    config_src,
+                    tunnel_secret,
+                )
+        except RuntimeError as e:
+            module.fail_json(msg=str(e))
     elif state == "absent":
         delete_tunnel(module, api_token, account_id, name)
 
