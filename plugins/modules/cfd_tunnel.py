@@ -113,7 +113,7 @@ def fetch_tunnel(module, api_token, account_id, name):
 
             # Check if the desired tunnel exists on this page
             for tunnel in tunnels:
-                if tunnel["name"] == name:
+                if tunnel["name"] == name and not tunnel.get("deleted_at"):
                     return tunnel
 
             # Check if there are more pages
@@ -139,6 +139,10 @@ def create_tunnel(
     tunnel_secret,
 ):
     """Creates a new Cloudflare Tunnel."""
+    # Check mode handling
+    if module.check_mode:
+        module.exit_json(changed=True, msg="Would have created tunnel (check mode)")
+
     url = f"{CF_API_BASE}/{account_id}/tunnels"
     headers = {
         "Authorization": f"Bearer {api_token}",
@@ -165,22 +169,36 @@ def create_tunnel(
 
 def update_tunnel(module, api_token, account_id, tunnel_id, config_src, tunnel_secret):
     """Updates an existing Cloudflare Tunnel."""
-    url = f"{CF_API_BASE}/{account_id}/cfd_tunnel/{tunnel_id}"
+    # First fetch current tunnel config
+    url = f"{CF_API_BASE}/{account_id}/tunnels/{tunnel_id}"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json",
     }
 
-    # Prepare the data to update
-    data = {}
-    if tunnel_secret:
-        data["tunnel_secret"] = tunnel_secret
-
     try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        current_tunnel = response.json().get("result")
+
+        # Check if update is needed
+        if current_tunnel.get("config_src", "local") == config_src and not current_tunnel.get(
+            "deleted_at",
+        ):
+            return module.exit_json(changed=False, tunnel=current_tunnel)
+
+        # Check mode handling
+        if module.check_mode:
+            return module.exit_json(changed=True, msg="Would have updated tunnel (check mode)")
+
+        # Prepare the data to update
+        data = {"config_src": config_src}
+        if tunnel_secret:
+            data["tunnel_secret"] = tunnel_secret
+
         response = requests.patch(url, headers=headers, json=data)
         response.raise_for_status()
-        result = response.json().get("result")
-        module.exit_json(changed=True, tunnel=result)
+        return module.exit_json(changed=True, tunnel=response.json().get("result"))
 
     except requests.exceptions.HTTPError as e:
         module.fail_json(
@@ -192,41 +210,54 @@ def update_tunnel(module, api_token, account_id, tunnel_id, config_src, tunnel_s
 
 def delete_tunnel(module, api_token, account_id, name):
     """Deletes a tunnel by name"""
-    url = f"{CF_API_BASE}/{account_id}/tunnels"
-    headers = {"Authorization": f"Bearer {api_token}"}
-    params = {"page": 1, "per_page": 50}
+    # First check if tunnel exists
+    existing_tunnel = fetch_tunnel(module, api_token, account_id, name)
+
+    # If tunnel doesn't exist, return with changed=False
+    if not existing_tunnel:
+        return module.exit_json(
+            changed=False,
+            msg="Tunnel does not exist",
+        )
+
+    # Check mode handling
+    if module.check_mode:
+        return module.exit_json(
+            changed=True,
+            msg="Would have deleted tunnel (check mode)",
+        )
+
+    # Delete the existing tunnel
+    url = f"{CF_API_BASE}/{account_id}/tunnels/{existing_tunnel['id']}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
 
     try:
-        while True:
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            tunnels = response.json().get("result", [])
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
 
-            # Check if the desired tunnel exists on this page
-            for tunnel in tunnels:
-                if tunnel["name"] == name:
-                    tunnel_id = tunnel["id"]
-                    delete_url = f"{url}/{tunnel_id}"
-                    delete_response = requests.delete(
-                        delete_url,
-                        headers=headers,
-                    )
+        # After successful deletion
+        return module.exit_json(
+            changed=True,
+            msg="Tunnel deleted",
+        )
 
-                    delete_response.raise_for_status()
-                    module.exit_json(changed=True, msg="Tunnel deleted")
-
-            # Check if there are more pages
-            pagination = response.json().get("result_info", {})
-            if pagination.get("page") >= pagination.get("total_pages", 1):
-                break  # No more pages to fetch
-
-            # Move to the next page
-            params["page"] += 1
-
-        module.exit_json(changed=False, msg="Tunnel does not exist.")
-
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            # If we get here, the tunnel doesn't exist (which shouldn't happen since we checked)
+            return module.exit_json(
+                changed=False,
+                msg="Tunnel does not exist",
+            )
+        module.fail_json(
+            msg=f"HTTP Error: {e.response.status_code} - {e.response.text}",
+        )
     except requests.exceptions.RequestException as e:
-        module.fail_json(msg=f"Error deleting tunnel: {str(e)}")
+        module.fail_json(
+            msg=f"Error deleting tunnel: {str(e)}",
+        )
 
 
 def main():

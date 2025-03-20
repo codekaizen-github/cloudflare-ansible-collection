@@ -1,0 +1,4 @@
+---
+# Required variables - these should be provided via environment variables or ansible-test
+cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+cloudflare_account_id: "{{ lookup('env', 'CLOUDFLARE_ACCOUNT_ID') }}"
