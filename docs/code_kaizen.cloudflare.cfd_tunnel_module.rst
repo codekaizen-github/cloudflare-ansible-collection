@@ -1,6 +1,5 @@
 .. _code_kaizen.cloudflare.cfd_tunnel_module:
 
-
 *********************************
 code_kaizen.cloudflare.cfd_tunnel
 *********************************
@@ -48,6 +47,7 @@ Parameters
                         <span style="color: purple">string</span>
                          / <span style="color: red">required</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                 </td>
@@ -64,6 +64,7 @@ Parameters
                         <span style="color: purple">string</span>
                          / <span style="color: red">required</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                 </td>
@@ -79,6 +80,7 @@ Parameters
                     <div style="font-size: small">
                         <span style="color: purple">string</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                         <ul style="margin: 0; padding: 0"><b>Choices:</b>
@@ -99,6 +101,7 @@ Parameters
                         <span style="color: purple">string</span>
                          / <span style="color: red">required</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                 </td>
@@ -114,6 +117,7 @@ Parameters
                     <div style="font-size: small">
                         <span style="color: purple">string</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                         <ul style="margin: 0; padding: 0"><b>Choices:</b>
@@ -134,18 +138,31 @@ Parameters
                     <div style="font-size: small">
                         <span style="color: purple">string</span>
                     </div>
+                    <div style="font-style: italic; font-size: small; color: darkgreen">added in 0.0.1</div>
                 </td>
                 <td>
                 </td>
                 <td>
-                        <div>Sets the password required to run a locally-managed tunnel.</div>
-                        <div>Must be at least 32 bytes and encoded as a base64 string.</div>
+                        <div>Sets the password required to run a locally-managed tunnel. Must be at least 32 bytes and encoded as a base64 string.</div>
                 </td>
             </tr>
     </table>
     <br/>
 
+Notes
+-----
 
+.. note::
+   - N/A
+
+
+See Also
+--------
+
+.. seealso::
+
+   `Cloudflare Tunnels API reference <https://developers.cloudflare.com/api/operations/cloudflare-tunnel-create-a-cloudflare-tunnel>`_
+       Complete reference of the Cloudflare Tunnels API.
 
 
 Examples
@@ -153,7 +170,7 @@ Examples
 
 .. code-block:: yaml
 
-    - name: Create a Cloudflare Tunnel
+    - name: Add or update a Cloudflare Tunnel
       code_kaizen.cloudflare.cfd_tunnel:
         api_token: mytoken
         account_id: 12345
@@ -202,9 +219,9 @@ Common return values are documented `here <https://docs.ansible.com/ansible/late
                       <span style="color: purple">list</span>
                     </div>
                 </td>
-                <td>success</td>
+                <td>success and O(state=present)</td>
                 <td>
-                            <div>A list of Cloudflare Tunnels as JSON.</div>
+                            <div>A list of Cloudflare Tunnels as JSON. See <a href='https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels'>https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels</a>.</div>
                     <br/>
                 </td>
             </tr>

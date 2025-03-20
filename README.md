@@ -33,7 +33,7 @@ code_kaizen.cloudflare.hello_world|Returns Hello message.
 ### Modules
 Name | Description
 --- | ---
-[code_kaizen.cloudflare.cfd_tunnel](http://example.com/repository/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
+[code_kaizen.cloudflare.cfd_tunnel](https://github.com/codekaizen-github/cloudflare-ansible-collection/blob/main/docs/code_kaizen.cloudflare.cfd_tunnel_module.rst)|Manage Cloudflare Tunnel
 
 <!--end collection content-->
 
@@ -101,7 +101,7 @@ python -m tox --conf tox-ansible.ini --ansible -e sanity-py3.12-devel --matrix-s
 
 ## Release notes
 
-See the [changelog](https://github.com/ansible-collections/REPONAMEHERE/tree/main/CHANGELOG.rst).
+See the [changelog](https://github.com/codekaizen-github/cloudflare-ansible-collection/tree/main/CHANGELOG.rst).
 
 ## Roadmap
 
