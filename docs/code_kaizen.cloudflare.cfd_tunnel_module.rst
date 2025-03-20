@@ -1,6 +1,5 @@
 .. _code_kaizen.cloudflare.cfd_tunnel_module:
 
-
 *********************************
 code_kaizen.cloudflare.cfd_tunnel
 *********************************
@@ -150,7 +149,6 @@ Parameters
     </table>
     <br/>
 
-
 Notes
 -----
 
@@ -239,3 +237,4 @@ Authors
 ~~~~~~~
 
 - Andrew Dawes (@andrewjdawes)
+- Kaitlyn Wyland (@kwyland22)

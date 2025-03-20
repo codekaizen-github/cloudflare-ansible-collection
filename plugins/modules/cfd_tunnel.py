@@ -1,17 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import, division, print_function
-from typing import List, Optional
-import traceback
-from ..module_utils.test import test_func
+import requests
+
 from ansible.module_utils.basic import AnsibleModule
-__metaclass__ = type
 
-# https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels
-# https://developers.cloudflare.com/api/operations/cloudflare-tunnel-create-a-cloudflare-tunnel
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: cfd_tunnel
 short_description: Manage Cloudflare Tunnel
@@ -27,72 +22,47 @@ options:
   api_token:
     description:
     - The Cloudflare API token.
-    details:
-      - See: https://developers.cloudflare.com/fundamentals/api/get-started/create-token/
     type: str
     required: true
-    version_added: "0.0.1"
   account_id:
     description:
     - ID of the Cloudflare account.
     type: str
     required: true
-    version_added: "0.0.1"
   name:
     description:
     - A user-friendly name for a tunnel.
     type: str
     required: true
-    version_added: "0.0.1"
-    examples:
-      - blog
   config_src:
     description:
       - Indicates if this is a locally or remotely configured tunnel.
-    details:
-      - If local, manage the tunnel using a YAML file on the origin machine.
-      - If cloudflare, manage the tunnel on the Zero Trust dashboard or using the Cloudflare Tunnel configuration endpoint.
     type: str
     required: false
     choices: [ local, cloudflare ]
     default: local
-    version_added: "0.0.1"
-    examples:
-      - local
   tunnel_secret:
     description:
-      - Sets the password required to run a locally-managed tunnel. Must be at least 32 bytes and encoded as a base64 string.
+      - Sets the password required to run a locally-managed tunnel.
+      - Must be at least 32 bytes and encoded as a base64 string.
     type: str
     required: false
-    version_added: "0.0.1"
-    examples:
-      - "AQIDBAUGBwgBAgMEBQYHCAECAwQFBgcIAQIDBAUGBwg="
   state:
     description:
     - Whether the tunnel should exist or not.
-    details:
-      - If present, the tunnel will be created if it does not exist or updated if it does.
-      - If absent, the tunnel will be deleted.
-      - If fetched, the tunnel will be fetched.
     type: str
     required: false
     choices: [ absent, present, fetched ]
     default: present
-    version_added: "0.0.1"
 requirements:
 - requests>=2.22.0
 author:
 - Andrew Dawes (@andrewjdawes)
-notes:
-- N/A
-seealso:
-- name: Cloudflare Tunnels API reference
-  description: Complete reference of the Cloudflare Tunnels API.
-  link: https://developers.cloudflare.com/api/operations/cloudflare-tunnel-create-a-cloudflare-tunnel
-'''
+- Kaitlyn Wyland (@kwyland22)
+"""
 
-EXAMPLES = '''
-- name: Add or update a Cloudflare Tunnel
+EXAMPLES = """
+- name: Create a Cloudflare Tunnel
   code_kaizen.cloudflare.cfd_tunnel:
     api_token: mytoken
     account_id: 12345
@@ -117,172 +87,246 @@ EXAMPLES = '''
     name: my-tunnel
     state: fetched
   register: results
-'''
+"""
 
-RETURN = '''
+RETURN = """
 variable:
-  description: A list of Cloudflare Tunnels as JSON. See U(https://developers.cloudflare.com/api/operations/cloudflare-tunnel-list-cloudflare-tunnels).
-  returned: success and O(state=present)
+  description: A list of Cloudflare Tunnels as JSON.
+  returned: success
   type: list
-'''
+"""
+
+CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts"
 
 
-GITHUB_IMP_ERR = None
-try:
-    from github import GithubException
-    from github.Repository import Repository
-    from github.Variable import Variable
-    from github.GithubException import UnknownObjectException
-    HAS_GITHUB_PACKAGE = True
-except Exception:
-    GITHUB_IMP_ERR = traceback.format_exc()
-    HAS_GITHUB_PACKAGE = False
+def fetch_tunnel(module, api_token, account_id, name):
+    """Fetches a tunnel by name and returns the tunnel data."""
+    url = f"{CF_API_BASE}/{account_id}/tunnels"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    params = {"page": 1, "per_page": 50}
 
-
-def testing():
-    return test_func()
-
-def fetch(repo: Repository, variable_name: Optional[str] = None):
-
-    results = dict(
-        changed=False,
-        variables=[]
-    )
-    instances: List[Variable] = []
     try:
-        existing_instances = github_repo_environment.get_variables(repo=repo)
-        print('Looping through instances')
-        for instance in existing_instances:
-            if variable_name is not None and instance.name != variable_name:
-                continue
-            instances.append(instance)
-    except UnknownObjectException:
-        pass
-    print(f'Getting raw data')
-    results['variables'] = [k.raw_data for k in instances]
-    return results
+        while True:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            tunnels = response.json().get("result", [])
+
+            # Check if the desired tunnel exists on this page
+            for tunnel in tunnels:
+                if tunnel["name"] == name and not tunnel.get("deleted_at"):
+                    return tunnel
+
+            # Check if there are more pages
+            pagination = response.json().get("result_info", {})
+            if pagination.get("page") >= pagination.get("total_pages", 1):
+                break
+
+            # Move to the next page
+            params["page"] += 1
+
+        return None
+
+    except requests.exceptions.RequestException as e:
+        module.fail_json(msg=f"Error fetching tunnel: {str(e)}")
 
 
-def create(repo: Repository, variable_name: str, variable_value: Optional[str], check_mode: bool = False):
-    results = dict(
-        changed=False,
-        variables=[]
-    )
-    instance: Variable | None
-    raw_data: dict | None = None
+def create_tunnel(
+    module,
+    api_token,
+    account_id,
+    name,
+    config_src,
+    tunnel_secret,
+):
+    """Creates a new Cloudflare Tunnel."""
+    # Check mode handling
+    if module.check_mode:
+        module.exit_json(changed=True, msg="Would have created tunnel (check mode)")
+
+    url = f"{CF_API_BASE}/{account_id}/tunnels"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "name": name,
+        "config_src": config_src,
+        "tunnel_secret": tunnel_secret,
+    }
+
     try:
-        instance = github_repo_environment.get_variable(
-            repo, variable_name=variable_name)
-        # TODO: Evaluate whether this is still necessary. "Must access the getter to trigger the network request"
-        raw_data = instance.raw_data
-    except UnknownObjectException:
-        instance = None
-    if instance is None:
-        results['changed'] = True
-        if not check_mode:
-            instance = github_repo_environment.create_variable(repo=repo,
-                                                               variable_name=variable_name, value=variable_value)
-            raw_data = instance.raw_data
-    else:
-        if instance.value != variable_value:
-            results['changed'] = True
-            if not check_mode:
-                instance.edit(value=variable_value)
-                # Update is required to get the new values in raw_data
-                instance.update()
-                raw_data = instance.raw_data
-    results['variables'] = [raw_data] if raw_data is not None else []
-    return results
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        module.exit_json(changed=True, tunnel=response.json().get("result"))
+
+    except requests.exceptions.HTTPError as e:
+        module.fail_json(
+            msg=(f"HTTP Error: {e.response.status_code} - " f"{e.response.text}"),
+        )
+    except requests.exceptions.RequestException as e:
+        module.fail_json(msg=f"Error creating tunnel: {str(e)}")
 
 
-def delete(repo: Repository, variable_name: str, check_mode: bool = False):
-    results = dict(
-        changed=False,
-        variables=[]
-    )
-    raw_data = []
+def update_tunnel(module, api_token, account_id, tunnel_id, config_src, tunnel_secret):
+    """Updates an existing Cloudflare Tunnel."""
+    # First fetch current tunnel config
+    url = f"{CF_API_BASE}/{account_id}/tunnels/{tunnel_id}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
     try:
-        instance = github_repo_environment.get_variable(
-            repo=repo, variable_name=variable_name)
-        raw_data.append(instance.raw_data)
-        # Delay setting to True in case there is an exception fetching instance
-        results['changed'] = True
-        if not check_mode:
-            instance.delete()
-    except UnknownObjectException:
-        pass
-    results['variables'] = raw_data
-    return results
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        current_tunnel = response.json().get("result")
+
+        # Check if update is needed
+        if current_tunnel.get("config_src", "local") == config_src and not current_tunnel.get(
+            "deleted_at",
+        ):
+            return module.exit_json(changed=False, tunnel=current_tunnel)
+
+        # Check mode handling
+        if module.check_mode:
+            return module.exit_json(changed=True, msg="Would have updated tunnel (check mode)")
+
+        # Prepare the data to update
+        data = {"config_src": config_src}
+        if tunnel_secret:
+            data["tunnel_secret"] = tunnel_secret
+
+        response = requests.patch(url, headers=headers, json=data)
+        response.raise_for_status()
+        return module.exit_json(changed=True, tunnel=response.json().get("result"))
+
+    except requests.exceptions.HTTPError as e:
+        module.fail_json(
+            msg=(f"HTTP Error: {e.response.status_code} - " f"{e.response.text}"),
+        )
+    except requests.exceptions.RequestException as e:
+        module.fail_json(msg=f"Error updating tunnel: {str(e)}")
 
 
-def run_module(params: dict, check_mode: bool = False):
-    results = dict(
-        changed=False,
-        variables=[],
-    )
-    gh = authenticate(
-        username=params['username'], password=params['password'], access_token=params['access_token'],
-        api_url=params['api_url'])
-    target = get_target(gh=gh, organization=params['organization'])
-    repo = target.get_repo(params['name'])
-    # Uppercase variable name for accurate comparison (GitHub will uppercase) - leave as None if not set
-    variable_name: str | None = params.get('variable_name', None)
-    if variable_name is not None:
-        variable_name = variable_name.upper()
-    if params['state'] == 'present':
-        results = create(
-            repo, variable_name, params['variable_value'], check_mode)
-    elif params['state'] == 'absent':
-        results = delete(repo, variable_name, check_mode)
-    elif params['state'] == 'fetched':
-        results = fetch(repo, variable_name)
-    else:
-        raise Exception("Invalid state")
-    return results
+def delete_tunnel(module, api_token, account_id, name):
+    """Deletes a tunnel by name"""
+    # First check if tunnel exists
+    existing_tunnel = fetch_tunnel(module, api_token, account_id, name)
+
+    # If tunnel doesn't exist, return with changed=False
+    if not existing_tunnel:
+        return module.exit_json(
+            changed=False,
+            msg="Tunnel does not exist",
+        )
+
+    # Check mode handling
+    if module.check_mode:
+        return module.exit_json(
+            changed=True,
+            msg="Would have deleted tunnel (check mode)",
+        )
+
+    # Delete the existing tunnel
+    url = f"{CF_API_BASE}/{account_id}/tunnels/{existing_tunnel['id']}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
+
+        # After successful deletion
+        return module.exit_json(
+            changed=True,
+            msg="Tunnel deleted",
+        )
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            # If we get here, the tunnel doesn't exist (which shouldn't happen since we checked)
+            return module.exit_json(
+                changed=False,
+                msg="Tunnel does not exist",
+            )
+        module.fail_json(
+            msg=f"HTTP Error: {e.response.status_code} - {e.response.text}",
+        )
+    except requests.exceptions.RequestException as e:
+        module.fail_json(
+            msg=f"Error deleting tunnel: {str(e)}",
+        )
 
 
 def main():
     module_args = dict(
-        api_url=dict(type='str', required=False,
-                     default='https://api.github.com'),
-        username=dict(type='str'),
-        password=dict(type='str', no_log=True),
-        access_token=dict(type='str', no_log=True),
-        organization=dict(
-            type='str', required=False, default=None),
-        name=dict(type='str', required=True),
-        variable_name=dict(type='str', required=False),
-        variable_value=dict(type='str', required=False),
-        state=dict(type='str', choices=[
-                   'present', 'absent', 'fetched'], default='present'),
+        api_token=dict(type="str", required=True, no_log=True),
+        account_id=dict(type="str", required=True),
+        name=dict(type="str", required=True),
+        config_src=dict(
+            type="str",
+            default="local",
+            choices=["local", "cloudflare"],
+        ),
+        tunnel_secret=dict(type="str", required=False, no_log=True),
+        state=dict(
+            type="str",
+            default="present",
+            choices=["absent", "present", "fetched"],
+        ),
     )
+
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True,
-        required_together=[('username', 'password')],
-        required_one_of=[('username', 'access_token')],
-        mutually_exclusive=[('username', 'access_token')]
     )
 
-    if not HAS_GITHUB_PACKAGE:
-        module.fail_json(msg=missing_required_lib(
-            "PyGithub"), exception=GITHUB_IMP_ERR)
+    api_token = module.params["api_token"]
+    account_id = module.params["account_id"]
+    name = module.params["name"]
+    config_src = module.params["config_src"]
+    tunnel_secret = module.params.get("tunnel_secret")
+    state = module.params["state"]
 
-    if module.params['state'] == 'present' and module.params['variable_name'] is None:
-        module.fail_json(
-            msg='When state is "present", variable_name parameter is required')
-    if module.params['state'] == 'absent' and module.params['variable_name'] is None:
-        module.fail_json(
-            msg='When state is "absent", variable_name parameter is required')
+    if state == "fetched":
+        tunnel = fetch_tunnel(module, api_token, account_id, name)
+        if tunnel:
+            # Tunnel found
+            module.exit_json(changed=False, tunnel=tunnel)
+        else:
+            # Tunnel not found, fail the task
+            module.fail_json(msg=f"Tunnel with name '{name}' not found.")
+    elif state == "present":
+        try:
+            existing_tunnel = fetch_tunnel(module, api_token, account_id, name)
 
-    try:
-        result = run_module(module.params, module.check_mode)
-        module.exit_json(**result)
-    except GithubException as e:
-        module.fail_json(msg="Github error. {0}".format(repr(e)))
-    except Exception as e:
-        module.fail_json(msg="Unexpected error. {0}".format(repr(e)))
+            if existing_tunnel:
+                # Tunnel exists; update it
+                update_tunnel(
+                    module,
+                    api_token,
+                    account_id,
+                    existing_tunnel["id"],
+                    config_src,
+                    tunnel_secret,
+                )
+            else:
+                # Tunnel does not exist; create it
+                create_tunnel(
+                    module,
+                    api_token,
+                    account_id,
+                    name,
+                    config_src,
+                    tunnel_secret,
+                )
+        except RuntimeError as e:
+            module.fail_json(msg=str(e))
+    elif state == "absent":
+        delete_tunnel(module, api_token, account_id, name)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

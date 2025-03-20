@@ -1,0 +1,45 @@
+---
+- name: Test Cloudflare Tunnel Module
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create a Cloudflare Tunnel
+      cfd_tunnel:
+        api_token: "api_token"
+        account_id: "account_id"
+        name: "test-tunnel"
+        config_src: local
+        tunnel_secret: "testpassword"
+        state: present
+      register: results_create
+      ignore_errors: yes
+
+    - name: Display create results
+      debug:
+        var: results_create
+
+    - name: Fetch the Cloudflare Tunnel
+      cfd_tunnel:
+        api_token: "api_token"
+        account_id: "account_id"
+        name: "test-tunnel"
+        state: fetched
+      register: tunnel_info
+      tags: fetch
+
+    - name: Display tunnel info
+      debug:
+        var: tunnel_info
+      tags: fetch
+
+    - name: Delete a Cloudflare Tunnel
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "api_token"
+        account_id: "account_id"
+        name: "test-tunnel"
+        state: absent
+      register: results
+
+    - name: Display delete results
+      debug:
+        var: results

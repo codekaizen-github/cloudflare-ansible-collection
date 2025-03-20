@@ -1,0 +1,129 @@
+---
+- name: Set variables for testing
+  ansible.builtin.set_fact:
+    test_tunnel_name: "ansible-test-tunnel-{{ lookup('password', '/dev/null chars=ascii_lowercase length=8') }}"
+    test_tunnel_secret: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') | b64encode }}"
+
+- name: Test tunnel creation and modifications
+  block:
+    - name: Test check mode for tunnel creation
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        config_src: "local"
+        tunnel_secret: "{{ test_tunnel_secret }}"
+        state: present
+      check_mode: true
+      register: check_mode_create
+
+    - name: Assert check mode would create tunnel
+      ansible.builtin.assert:
+        that:
+          - check_mode_create is changed
+          - "'Would have created tunnel (check mode)' in check_mode_create.msg"
+
+    - name: Create tunnel
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        config_src: "local"
+        tunnel_secret: "{{ test_tunnel_secret }}"
+        state: present
+      register: create_result
+
+    - name: Assert tunnel was created
+      ansible.builtin.assert:
+        that:
+          - create_result is changed
+          - create_result.tunnel is defined
+          - create_result.tunnel.name == test_tunnel_name
+
+    - name: Test idempotency - Create tunnel again
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        config_src: "local"
+        tunnel_secret: "{{ test_tunnel_secret }}"
+        state: present
+      register: idempotency_result
+
+    - name: Assert create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not idempotency_result is changed
+          - idempotency_result.tunnel is defined
+          - idempotency_result.tunnel.name == test_tunnel_name
+
+    - name: Fetch tunnel details
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        state: fetched
+      register: fetch_result
+
+    - name: Assert fetch returns correct data
+      ansible.builtin.assert:
+        that:
+          - not fetch_result is changed
+          - fetch_result.tunnel is defined
+          - fetch_result.tunnel.name == test_tunnel_name
+
+    - name: Test check mode for deletion
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        state: absent
+      check_mode: true
+      register: check_mode_delete
+
+    - name: Assert check mode would delete tunnel
+      ansible.builtin.assert:
+        that:
+          - check_mode_delete is changed
+          - "'Would have deleted tunnel (check mode)' in check_mode_delete.msg"
+
+    - name: Delete tunnel
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        state: absent
+      register: delete_result
+
+    - name: Assert tunnel was deleted
+      ansible.builtin.assert:
+        that:
+          - delete_result is changed
+          - "'Tunnel deleted' in delete_result.msg"
+
+    - name: Wait for deletion to propagate
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Test idempotency - Delete non-existent tunnel
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        state: absent
+      register: idempotency_delete_result
+
+    - name: Assert delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not idempotency_delete_result is changed
+          - "'Tunnel does not exist' in idempotency_delete_result.msg"
+
+  always:
+    - name: Cleanup - Ensure tunnel is deleted
+      code_kaizen.cloudflare.cfd_tunnel:
+        api_token: "{{ cloudflare_api_token }}"
+        account_id: "{{ cloudflare_account_id }}"
+        name: "{{ test_tunnel_name }}"
+        state: absent
+      ignore_errors: true
